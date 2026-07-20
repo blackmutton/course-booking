@@ -18,6 +18,8 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->enum('role', [UserRole::ADMIN->value, UserRole::TEACHER->value, UserRole::STUDENT->value])->default(UserRole::STUDENT->value);
             $table->timestamp('email_verified_at')->nullable();
+            $table->string('email_verified_token')->nullable()->comment('用於驗證電子郵件的唯一令牌');
+            $table->timestamp('email_token_expiration')->nullable()->comment('驗證電子郵件令牌的過期時間');
             $table->string('password');
             $table->rememberToken();
             $table->timestamps();

@@ -14,7 +14,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password', 'role'])]
+#[Fillable(['name', 'email', 'password', 'role', 'email_verified_token', 'email_token_expiration'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -32,7 +32,15 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'role' => UserRole::class,
+            'email_token_expiration' => 'datetime',
         ];
+    }
+
+    public function getVerifyUrl(): string
+    {
+        return config('app.frontend_url')
+            . '/verify-email?token='
+            . $this->email_verified_token;
     }
 
     public function teacher(): HasOne
