@@ -15,6 +15,9 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         // statefulApi() 用於 Sanctum SPA 認證，讓 API 請求可以透過 Cookie 中的 Session 來辨識使用者，而不需要每次攜帶 Bearer Token。
         $middleware->statefulApi();
+        $middleware->alias([
+            'verified' => \App\Http\Middleware\EnsureEmailVerified::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
