@@ -2,13 +2,12 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-#[Fillable(['course_id', 'student_id', 'status', 'email_sent_at', 'checked_at', 'cancelled_at'])]
 class CourseRegistration extends Model
 {
+    protected $fillable = ['course_id', 'student_id', 'status', 'email_sent_at', 'checked_at', 'cancelled_at'];
     /**
      * Get the attributes that should be cast.
      *

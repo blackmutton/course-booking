@@ -3,7 +3,6 @@
 namespace App\Jobs;
 
 use App\Mail\PasswordResetSuccessEmail;
-use App\Mail\WelcomeEmail;
 use App\Models\User;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -45,6 +44,7 @@ class SendPasswordResetSuccessEmail implements ShouldQueue
                 'email' => $this->user->email,
             ]
         );
+
         Mail::to($this->user->email)->send(new PasswordResetSuccessEmail($this->user));
     }
 }

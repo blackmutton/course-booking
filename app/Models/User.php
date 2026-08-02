@@ -6,20 +6,33 @@ namespace App\Models;
 
 use App\Enums\UserRole;
 use Database\Factories\UserFactory;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 
-#[Fillable(['name', 'email', 'password', 'role', 'email_verified_token', 'email_token_expiration'])]
-#[Hidden(['password', 'remember_token'])]
+/**
+ * @property UserRole $role
+ * @property \Carbon\Carbon|null $email_token_expiration
+ * @property \Carbon\Carbon|null $email_verified_at
+ */
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
+    protected $fillable = [
+        'email',
+        'password',
+        'role',
+        'email_verified_token',
+        'email_token_expiration',
+    ];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
 
     /**
      * Get the attributes that should be cast.
@@ -38,7 +51,7 @@ class User extends Authenticatable
 
     public function getVerifyUrl(): string
     {
-        return config('app.frontend_url')
+        return (string) config('app.frontend_url')
             . '/verify-email?token='
             . $this->email_verified_token;
     }
@@ -51,5 +64,15 @@ class User extends Authenticatable
     public function student(): HasOne
     {
         return $this->hasOne(Student::class);
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->role === UserRole::ADMIN;
+    }
+
+    public function isTeacher(): bool
+    {
+        return $this->role === UserRole::TEACHER;
     }
 }

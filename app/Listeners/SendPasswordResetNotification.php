@@ -24,8 +24,10 @@ class SendPasswordResetNotification
      */
     public function handle(PasswordReset $event): void
     {
+        /** @var \App\Models\User $user */
         $user = $event->user;
 
-        SendPasswordResetSuccessEmail::dispatch($user)->onQueue('emails');
+        SendPasswordResetSuccessEmail::dispatch($user)
+            ->onQueue('emails');
     }
 }
