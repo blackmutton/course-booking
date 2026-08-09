@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Jobs\SendVerifyEmailJob;
@@ -29,6 +30,7 @@ class RegisterController extends Controller
                 'email' => $request->email,
                 'password' => Hash::make($request->password),
                 'name' => $request->name,
+                'role' => UserRole::STUDENT,
                 'email_verified_token' => Str::uuid()->toString(),
                 'email_token_expiration' => now()->addMinutes(30),
             ]);
@@ -64,6 +66,12 @@ class RegisterController extends Controller
         }
 
         if ($user->email_token_expiration->isPast()) {
+            $user->update([
+                'email_verified_token' => Str::uuid()->toString(),
+                'email_token_expiration' => now()->addMinutes(30),
+            ]);
+            SendVerifyEmailJob::dispatch($user)->onQueue('emails');
+
             throw ValidationException::withMessages([
                 'token' => ['Verification token has expired.'],
             ]);
