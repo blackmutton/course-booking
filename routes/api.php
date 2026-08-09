@@ -26,7 +26,7 @@ Route::middleware(['auth:sanctum', 'verified'])->group(function () {
     // 後台
     Route::middleware('can:access-admin-panel')->prefix('admin')->group(function () {
         Route::get('/dashboard', function () {
-            return response()->json(['message' => 'Welcome to the admin dashboard!']);
+            return response()->json(['message' => 'Success']);
         });
 
         Route::resource('teachers', TeacherController::class);
