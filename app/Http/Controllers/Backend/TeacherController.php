@@ -25,6 +25,7 @@ class TeacherController extends Controller
         $this->authorize('viewAny', Teacher::class);
 
         $request->validate([
+            'status' => 'boolean',
             'name' => 'string|max:255',
             'email' => 'string|email|max:255',
             'per_page' => 'integer|min:1|max:100',
@@ -32,6 +33,9 @@ class TeacherController extends Controller
         ]);
 
         $query = Teacher::with('user')
+            ->when($request->filled('status'), function ($query) use ($request) {
+                $query->where('status', $request->input('status'));
+            })
             ->when($request->filled('name'), function ($query) use ($request) {
                 $query->where('name', 'like', '%' . $request->input('name') . '%');
             })
@@ -62,6 +66,7 @@ class TeacherController extends Controller
         $this->authorize('create', Teacher::class);
 
         $request->validate([
+            'status' => 'required|boolean',
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email',
             'password' => 'required|string|min:8|confirmed',
@@ -76,6 +81,7 @@ class TeacherController extends Controller
                     'email_verified_at' => now(),
                 ]);
                 $user->teacher()->create([
+                    'status' => $request->input('status'),
                     'name' => $request->input('name'),
                 ]);
 
@@ -112,6 +118,7 @@ class TeacherController extends Controller
     {
         $this->authorize('update', $teacher);
         $request->validate([
+            'status' => 'sometimes|boolean',
             'name' => 'sometimes|string|max:255',
             'password' => 'sometimes|string|min:8|confirmed',
             'email' => [
@@ -138,7 +145,7 @@ class TeacherController extends Controller
 
                 $teacher->user->update($data);
 
-                $teacher->update($request->only('name'));
+                $teacher->update($request->only(['status', 'name']));
             });
         } catch (Throwable $e) {
             Log::error('Failed to update teacher', [
@@ -169,11 +176,12 @@ class TeacherController extends Controller
         } catch (Throwable $e) {
             Log::error('Failed to delete teacher', [
                 'user_id' => $teacher->user_id,
+                'teacher_id' => $teacher->id,
                 'exception' => $e,
             ]);
             throw $e;
         }
 
-        return response()->json(['message' => 'Success']);
+        return response()->noContent();
     }
 }

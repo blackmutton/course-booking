@@ -13,12 +13,13 @@ return new class extends Migration
     {
         Schema::create('teachers', function (Blueprint $table) {
             $table->id();
-
+            $table->tinyInteger('status')->default(1);
             $table->foreignId('user_id')
                 ->constrained()
-                ->cascadeOnDelete();
+                ->cascadeOnDelete(); //和父資料一起刪除
 
             $table->timestamps();
+            $table->unique('user_id');
         });
     }
 

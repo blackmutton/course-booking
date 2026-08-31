@@ -13,7 +13,7 @@ class TeacherPolicy
      */
     public function before(User $user, string $ability): bool|null
     {
-        if ($user->isAdmin()) {
+        if ($user->isAdmin() && $ability !== 'delete') {
             return true;
         }
 
@@ -60,7 +60,11 @@ class TeacherPolicy
      */
     public function delete(User $user, Teacher $teacher): bool
     {
-        return false;
+        if ($user->isTeacher()) {
+            return false;
+        }
+
+        return !$teacher->courses()->exists();
     }
 
     /**
