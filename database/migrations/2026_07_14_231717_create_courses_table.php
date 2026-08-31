@@ -16,7 +16,7 @@ return new class extends Migration
 
             $table->foreignId('teacher_id')
                 ->constrained()
-                ->cascadeOnDelete();
+                ->restrictOnDelete(); //如果存在相關的 Course 資料，就不能刪除該 Teacher
 
             $table->string('title');
 
