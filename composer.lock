@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "d1d8cfc507bf45e0e512a089f7375e9a",
+    "content-hash": "8f240d7cd052792f6a2130e6ab1b9ccd",
     "packages": [
         {
             "name": "brick/math",
@@ -6673,16 +6673,16 @@
         },
         {
             "name": "laravel/sail",
-            "version": "v1.63.0",
+            "version": "v1.70.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/laravel/sail.git",
-                "reference": "51bbce3f803c1d386cabbb44e618c955a12ff5fc"
+                "reference": "56c1c94117ef12ee707d50433273228ebee7138e"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/laravel/sail/zipball/51bbce3f803c1d386cabbb44e618c955a12ff5fc",
-                "reference": "51bbce3f803c1d386cabbb44e618c955a12ff5fc",
+                "url": "https://api.github.com/repos/laravel/sail/zipball/56c1c94117ef12ee707d50433273228ebee7138e",
+                "reference": "56c1c94117ef12ee707d50433273228ebee7138e",
                 "shasum": ""
             },
             "require": {
@@ -6732,7 +6732,8 @@
                 "issues": "https://github.com/laravel/sail/issues",
                 "source": "https://github.com/laravel/sail"
             },
-            "time": "2026-06-18T08:54:14+00:00"
+            "time": "2026-10-15T08:53:46+00:00",
+            "published-time": "2026-11-10T16:10:09+00:00"
         },
         {
             "name": "mockery/mockery",
@@ -8684,8 +8685,8 @@
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
-        "php": "^8.3"
+        "php": "^8.5"
     },
     "platform-dev": {},
-    "plugin-api-version": "2.9.0"
+    "plugin-api-version": "2.11.0"
 }
