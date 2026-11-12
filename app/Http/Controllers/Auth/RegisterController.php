@@ -51,13 +51,14 @@ class RegisterController extends Controller
         ]);
     }
 
-    public function verify(Request $request)
+    public function verifySigned(Request $request, string $token)
     {
-        $request->validate([
-            'token' => 'required|string',
-        ]);
+        // token存在於路由而非request，因此使用validator()來驗證
+        validator(['token' => $token], [
+            'token' => ['required', 'string'],
+        ])->validate();
 
-        $user = User::where('email_verified_token', $request->token)->whereNull('email_verified_at')->first();
+        $user = User::where('email_verified_token', $token)->whereNull('email_verified_at')->first();
 
         if (!$user) {
             throw ValidationException::withMessages([

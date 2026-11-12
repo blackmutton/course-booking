@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use App\Listeners\SendPasswordResetNotification;
+use App\Models\CourseRegistration;
+use App\Observers\CourseRegistrationObserver;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
@@ -23,6 +25,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        CourseRegistration::observe(CourseRegistrationObserver::class);
+
         Event::listen(
             PasswordReset::class,
             SendPasswordResetNotification::class

@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\URL;
 use Laravel\Sanctum\HasApiTokens;
 
 /**
@@ -52,9 +53,11 @@ class User extends Authenticatable
 
     public function getVerifyUrl(): string
     {
-        return (string) config('app.frontend_url')
-            . '/verify-email?token='
-            . $this->email_verified_token;
+        return URL::temporarySignedRoute(
+            'api.verify.signed',
+            $this->email_token_expiration,
+            ['token' => $this->email_verified_token],
+        );
     }
 
     public function teacher(): HasOne
@@ -75,5 +78,10 @@ class User extends Authenticatable
     public function isTeacher(): bool
     {
         return $this->role === UserRole::TEACHER;
+    }
+
+    public function isStudent(): bool
+    {
+        return $this->role === UserRole::STUDENT;
     }
 }

@@ -1,0 +1,113 @@
+<?php
+
+namespace App\Http\Controllers\Frontend;
+
+use App\Enums\CourseRegistrationStatus;
+use App\Http\Controllers\Controller;
+use App\Models\Course;
+use App\Models\Teacher;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+
+class CourseController extends Controller
+{
+    /**
+     * Display a listing of the resource.
+     */
+    public function index(Request $request)
+    {
+        $validated = $request->validate([
+            'teacher_id' => 'nullable|integer|exists:teachers,id',
+            'title' => 'nullable|string|max:255',
+            'start_time' => 'required_with:end_time|date_format:Y-m-d H:i:s',
+            'end_time' => 'required_with:start_time|date_format:Y-m-d H:i:s|after:start_time',
+            'per_page' => 'nullable|integer|min:1|max:100',
+            'page' => 'nullable|integer|min:1',
+        ]);
+
+        $query = Course::query()
+            ->with('teacher.user:id,name')
+            ->select([
+                'id',
+                'teacher_id',
+                'title',
+                'start_time',
+                'end_time',
+            ])
+            ->where('status', 1) // 只顯示啟用的課程
+            ->where('start_time', '>=', Carbon::now()) // 只顯示未來的課程
+            ->when(isset($validated['teacher_id']), function ($query) use ($validated) {
+                $query->where('teacher_id', $validated['teacher_id']);
+            })
+            ->when(isset($validated['title']), function ($query) use ($validated) {
+                $query->where('title', 'like', '%' . $validated['title'] . '%');
+            })
+            ->when(isset($validated['start_time']), function ($query) use ($validated) {
+                $query->where('end_time', '>=', $validated['start_time']);
+            })
+            ->when(isset($validated['end_time']), function ($query) use ($validated) {
+                $query->where('start_time', '<=', $validated['end_time']);
+            });
+
+        $courses = $query->orderBy('start_time')->paginate($validated['per_page'] ?? 15);
+
+        return response()->json($courses);
+    }
+
+
+    /**
+     * Display the specified resource.
+     */
+    public function show(Course $course)
+    {
+        return response()->json(
+            $course->load('teacher.user')
+        );
+    }
+
+    public function register(Request $request, int $id)
+    {
+        return DB::transaction(function () use ($id) {
+
+            $course = Course::where('id', $id)->lockForUpdate()->firstOrFail();
+
+            // 檢查課程是否啟用
+            if (!$course->status) {
+                return response()->json(['message' => '課程尚未啟用'], 400);
+            }
+
+            // 檢查課程是否已經開始
+            if ($course->start_time <= Carbon::now()) {
+                return response()->json(['message' => '課程已經開始，無法報名'], 400);
+            }
+
+            $user = auth()->user();
+            // 檢查是否為學生
+            if (!$user || !$user->isStudent() || !$user->student) {
+                return response()->json(['message' => '只有學生可以報名課程'], 403);
+            }
+
+            // 檢查學生是否已經報名過該課程
+            if ($user->isStudent() && $user->student->registrations()->where('course_id', $course->id)->exists()) {
+                return response()->json(['message' => '您已經報名過該課程'], 400);
+            }
+
+            // 檢查課程人數限制
+            if (
+                $course->people_limit > 0 &&
+                $course->registrations()->useWritePdo()->whereIn('status', [CourseRegistrationStatus::Pending->value, CourseRegistrationStatus::Confirmed->value])->count() >= $course->people_limit
+            ) {
+                return response()->json(['message' => '課程人數已滿'], 400);
+            }
+
+            // 建立報名紀錄
+            $user->student->registrations()->create([
+                'course_id' => $course->id,
+                'status' => CourseRegistrationStatus::Pending, // 預設為待確認
+            ]);
+
+            return response()->json(['message' => 'Success'], 201);
+        });
+    }
+}
