@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Frontend;
 use App\Enums\CourseRegistrationStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Course;
+use App\Models\CourseRegistration;
 use App\Models\Teacher;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -88,24 +89,38 @@ class CourseController extends Controller
                 return response()->json(['message' => '只有學生可以報名課程'], 403);
             }
 
-            // 檢查學生是否已經報名過該課程
-            if ($user->isStudent() && $user->student->registrations()->where('course_id', $course->id)->exists()) {
+            $registration = $user->student->registrations()->where('course_id', $course->id)->lockForUpdate()->first();
+            if (
+                $registration && !in_array($registration->status, [CourseRegistrationStatus::Cancelled, CourseRegistrationStatus::Expired], true)
+                && !($registration->status === CourseRegistrationStatus::Pending && (!$registration->confirm_expires_at || $registration->confirm_expires_at->isPast()))
+            ) {
                 return response()->json(['message' => '您已經報名過該課程'], 400);
             }
 
             // 檢查課程人數限制
             if (
                 $course->people_limit > 0 &&
-                $course->registrations()->useWritePdo()->whereIn('status', [CourseRegistrationStatus::Pending->value, CourseRegistrationStatus::Confirmed->value])->count() >= $course->people_limit
+                $course->registrations()->useWritePdo()->where(function ($query) {
+                    // 只計算已確認或待確認且尚未過期的報名
+                    $query->where('status', CourseRegistrationStatus::Confirmed->value)
+                        ->orWhere(fn($query) => $query->where('status', CourseRegistrationStatus::Pending->value)
+                            ->where('confirm_expires_at', '>', now()));
+                })->count() >= $course->people_limit
             ) {
                 return response()->json(['message' => '課程人數已滿'], 400);
             }
 
-            // 建立報名紀錄
-            $user->student->registrations()->create([
-                'course_id' => $course->id,
-                'status' => CourseRegistrationStatus::Pending, // 預設為待確認
-            ]);
+            $registrationData = [
+                'status' => CourseRegistrationStatus::Pending,
+                'confirm_expires_at' => now()->addMinutes(CourseRegistration::CONFIRMATION_TTL_MINUTES),
+                'email_sent_at' => null,
+                'cancelled_at' => null,
+            ];
+            if ($registration) {
+                $registration->update($registrationData);
+            } else {
+                $user->student->registrations()->create($registrationData + ['course_id' => $course->id]);
+            }
 
             return response()->json(['message' => 'Success'], 201);
         });

@@ -23,7 +23,9 @@ class CourseRegistrationObserver
      */
     public function updated(CourseRegistration $courseRegistration): void
     {
-        //
+        if ($courseRegistration->wasChanged('status') && $courseRegistration->status === CourseRegistrationStatus::Pending) {
+            SendCourseRegistrationEmailJob::dispatch($courseRegistration->student->user, $courseRegistration)->afterCommit();
+        }
     }
 
     /**

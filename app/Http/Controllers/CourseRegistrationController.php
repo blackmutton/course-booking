@@ -23,6 +23,22 @@ class CourseRegistrationController extends Controller
                 ]);
             }
 
+            if ($registration->status === CourseRegistrationStatus::Expired ||
+                ($registration->status === CourseRegistrationStatus::Pending && (!$registration->confirm_expires_at || $registration->confirm_expires_at->isPast()))) {
+                if ($registration->status === CourseRegistrationStatus::Pending) {
+                    $registration->update(['status' => CourseRegistrationStatus::Expired]);
+                }
+                throw ValidationException::withMessages([
+                    'registration' => ['Confirmation link has expired. Please register again.'],
+                ]);
+            }
+
+            if ($registration->status !== CourseRegistrationStatus::Pending && $registration->status !== CourseRegistrationStatus::Confirmed) {
+                throw ValidationException::withMessages([
+                    'registration' => ['This registration cannot be confirmed.'],
+                ]);
+            }
+
             if ($registration->status !== CourseRegistrationStatus::Confirmed) {
                 $registration->update(['status' => CourseRegistrationStatus::Confirmed]);
             }

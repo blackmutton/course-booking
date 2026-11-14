@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Enums\CourseRegistrationStatus;
 use App\Mail\CourseRegistrationEmail;
 use App\Models\CourseRegistration;
 use App\Models\User;
@@ -44,13 +45,13 @@ class SendCourseRegistrationEmailJob implements ShouldQueue
             $this->courseRegistration->id
         );
         // 避免重複寄送
-        if ($registration->email_sent_at) {
+        if ($registration->status !== CourseRegistrationStatus::Pending || $registration->email_sent_at) {
             return;
         }
 
         // 在這裡撰寫發送課程報名電子郵件的邏輯
         Mail::to($this->user->email)->send(new CourseRegistrationEmail($this->user, $this->courseRegistration));
-        $this->courseRegistration->update(['email_sent_at' => now()]);
+        $registration->update(['email_sent_at' => now()]);
         Log::info(
             'Course registration email sent to user.',
             [

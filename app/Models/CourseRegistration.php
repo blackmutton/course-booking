@@ -9,7 +9,9 @@ use Illuminate\Support\Facades\URL;
 
 class CourseRegistration extends Model
 {
-    protected $fillable = ['course_id', 'student_id', 'status', 'email_sent_at', 'checked_at', 'cancelled_at'];
+    public const CONFIRMATION_TTL_MINUTES = 30;
+
+    protected $fillable = ['course_id', 'student_id', 'status', 'email_sent_at', 'checked_at', 'cancelled_at', 'confirm_expires_at'];
     /**
      * Get the attributes that should be cast.
      *
@@ -21,6 +23,7 @@ class CourseRegistration extends Model
             'email_sent_at' => 'datetime',
             'checked_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'confirm_expires_at' => 'datetime',
             'status' => CourseRegistrationStatus::class,
         ];
     }
@@ -38,9 +41,10 @@ class CourseRegistration extends Model
     public function getEnrollmentUrl(): string
     {
         // 設定有效期限的URL
+        $expiresAt = $this->confirm_expires_at ?? now()->addMinutes(self::CONFIRMATION_TTL_MINUTES);
         return URL::temporarySignedRoute(
             'api.course-registrations.confirm',
-            now()->addMinutes(30),
+            $expiresAt,
             ['courseRegistration' => $this->getKey()],
         );
     }
