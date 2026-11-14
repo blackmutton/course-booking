@@ -6,8 +6,6 @@ use App\Enums\CourseRegistrationStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Course;
 use App\Models\CourseRegistration;
-use App\Models\Teacher;
-use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
@@ -24,8 +22,8 @@ class CourseController extends Controller
         $validated = $request->validate([
             'teacher_id' => 'nullable|integer|exists:teachers,id',
             'title' => 'nullable|string|max:255',
-            'start_time' => 'required_with:end_time|date_format:Y-m-d H:i:s',
-            'end_time' => 'required_with:start_time|date_format:Y-m-d H:i:s|after:start_time',
+            'start_time' => 'nullable|required_with:end_time|date_format:Y-m-d H:i:s',
+            'end_time' => 'nullable|required_with:start_time|date_format:Y-m-d H:i:s|after:start_time',
             'per_page' => 'nullable|integer|min:1|max:100',
             'page' => 'nullable|integer|min:1',
         ]);
@@ -39,8 +37,31 @@ class CourseController extends Controller
                 'start_time',
                 'end_time',
             ])
-            ->where('status', 1) // 只顯示啟用的課程
-            ->where('start_time', '>=', Carbon::now()) // 只顯示未來的課程
+            ->selectRaw('
+            CASE
+                WHEN people_limit = 0 THEN NULL
+                ELSE GREATEST(
+                    0,
+                    people_limit - (
+                        SELECT COUNT(*)
+                        FROM course_registrations
+                        WHERE course_id = courses.id
+                        AND (
+                            status = ?
+                            OR (
+                                status = ?
+                                AND confirm_expires_at > NOW()
+                            )
+                        )
+                    )
+                )
+            END AS available_slots
+        ', [
+                CourseRegistrationStatus::Confirmed->value,
+                CourseRegistrationStatus::Pending->value,
+            ])
+            ->where('status', 1)
+            ->where('start_time', '>=', now())
             ->when(isset($validated['teacher_id']), function ($query) use ($validated) {
                 $query->where('teacher_id', $validated['teacher_id']);
             })
@@ -65,8 +86,28 @@ class CourseController extends Controller
      */
     public function show(Course $course)
     {
+        $course->load([
+            'teacher.user:id,name',
+        ]);
+
         return response()->json(
-            $course->load('teacher.user')
+            array_merge(
+                $course->only([
+                    'id',
+                    'teacher_id',
+                    'title',
+                    'description',
+                    'start_time',
+                    'end_time',
+                    'people_limit',
+                ]),
+                [
+                    'teacher' => [
+                        'id' => $course->teacher?->id,
+                        'name' => $course->teacher?->user?->name,
+                    ],
+                ]
+            )
         );
     }
 
