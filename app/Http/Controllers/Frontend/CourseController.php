@@ -9,7 +9,10 @@ use App\Models\CourseRegistration;
 use App\Models\Teacher;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class CourseController extends Controller
 {
@@ -67,62 +70,106 @@ class CourseController extends Controller
         );
     }
 
+
     public function register(Request $request, int $id)
     {
-        return DB::transaction(function () use ($id) {
+        // 在交易外先檢查使用者是否為學生，避免持有交易鎖定資料庫資源太久
+        $user = auth()->user();
 
-            $course = Course::where('id', $id)->lockForUpdate()->firstOrFail();
+        // 檢查是否為學生
+        if (!$user || !$user->isStudent() || !$user->student) {
+            return response()->json(['message' => '只有學生可以報名課程'], 403);
+        }
 
-            // 檢查課程是否啟用
-            if (!$course->status) {
-                return response()->json(['message' => '課程尚未啟用'], 400);
-            }
+        $key = "course_registration_{$user->id}_{$id}";
+        $lock = null;
 
-            // 檢查課程是否已經開始
-            if ($course->start_time <= Carbon::now()) {
-                return response()->json(['message' => '課程已經開始，無法報名'], 400);
-            }
+        try {
+            // 防止同一學生重複送出報名請求
+            $lock = Cache::lock($key, 30)->block(2);
 
-            $user = auth()->user();
-            // 檢查是否為學生
-            if (!$user || !$user->isStudent() || !$user->student) {
-                return response()->json(['message' => '只有學生可以報名課程'], 403);
-            }
+            return DB::transaction(function () use ($id, $user) {
 
-            $registration = $user->student->registrations()->where('course_id', $course->id)->lockForUpdate()->first();
-            if (
-                $registration && !in_array($registration->status, [CourseRegistrationStatus::Cancelled, CourseRegistrationStatus::Expired], true)
-                && !($registration->status === CourseRegistrationStatus::Pending && (!$registration->confirm_expires_at || $registration->confirm_expires_at->isPast()))
-            ) {
-                return response()->json(['message' => '您已經報名過該課程'], 400);
-            }
+                $student = $user->student;
 
-            // 檢查課程人數限制
-            if (
-                $course->people_limit > 0 &&
-                $course->registrations()->useWritePdo()->where(function ($query) {
-                    // 只計算已確認或待確認且尚未過期的報名
-                    $query->where('status', CourseRegistrationStatus::Confirmed->value)
-                        ->orWhere(fn($query) => $query->where('status', CourseRegistrationStatus::Pending->value)
-                            ->where('confirm_expires_at', '>', now()));
-                })->count() >= $course->people_limit
-            ) {
-                return response()->json(['message' => '課程人數已滿'], 400);
-            }
+                // 鎖定課程，避免同時報名造成名額超額
+                $course = Course::where('id', $id)->lockForUpdate()->firstOrFail();
 
-            $registrationData = [
-                'status' => CourseRegistrationStatus::Pending,
-                'confirm_expires_at' => now()->addMinutes(CourseRegistration::CONFIRMATION_TTL_MINUTES),
-                'email_sent_at' => null,
-                'cancelled_at' => null,
-            ];
-            if ($registration) {
-                $registration->update($registrationData);
-            } else {
-                $user->student->registrations()->create($registrationData + ['course_id' => $course->id]);
-            }
+                // 檢查課程是否啟用
+                if (!$course->status) {
+                    return response()->json(['message' => '課程尚未啟用'], 400);
+                }
 
-            return response()->json(['message' => 'Success'], 201);
-        });
+                // 檢查課程是否已經開始
+                if ($course->start_time <= now()) {
+                    return response()->json(['message' => '課程已經開始，無法報名'], 400);
+                }
+
+                // 將該學生該課程已逾期的 Pending 更新為 Expired
+                Artisan::call('course-registrations:expire', [
+                    '--student_id' => $student->id,
+                    '--course_id' => $course->id,
+                ]);
+
+                // 檢查是否已有有效報名
+                $hasActiveRegistration = $student->registrations()
+                    ->where('course_id', $course->id)
+                    ->whereIn('status', [
+                        CourseRegistrationStatus::Pending->value,
+                        CourseRegistrationStatus::Confirmed->value,
+                    ])
+                    ->exists();
+
+                if ($hasActiveRegistration) {
+                    return response()->json(['message' => '您已經報名過該課程'], 400);
+                }
+
+                // 檢查課程人數限制
+                if (
+                    $course->people_limit > 0 &&
+                    $course->registrations()
+                    ->useWritePdo()
+                    ->where(function ($query) {
+                        $query->where(
+                            'status',
+                            CourseRegistrationStatus::Confirmed->value
+                        )->orWhere(function ($query) {
+                            $query->where(
+                                'status',
+                                CourseRegistrationStatus::Pending->value
+                            )->where('confirm_expires_at', '>', now());
+                        });
+                    })
+                    ->count() >= $course->people_limit
+                ) {
+                    return response()->json(['message' => '課程人數已滿'], 400);
+                }
+
+                // 每次報名都建立新的紀錄，不覆蓋歷史資料
+                $student->registrations()->create([
+                    'course_id' => $course->id,
+                    'status' => CourseRegistrationStatus::Pending,
+                    'confirm_expires_at' => now()->addMinutes(CourseRegistration::CONFIRMATION_TTL_MINUTES),
+                    'email_sent_at' => null,
+                    'cancelled_at' => null,
+                ]);
+
+                return response()->json(['message' => 'Success'], 201);
+            });
+        } catch (\Throwable $e) {
+
+            // 記錄實際錯誤，方便除錯
+            Log::error('Failed to register course.', [
+                'user_id' => $user->id ?? null,
+                'course_id' => $id,
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => '系統忙碌中，請稍後再試'
+            ], 503);
+        } finally {
+            $lock?->release();
+        }
     }
 }
