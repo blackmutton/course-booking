@@ -12,7 +12,9 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class CourseRegistrationEmail extends Mailable implements ShouldQueue
+// Mailable 不實作 ShouldQueue：寄信在 Job 內同步執行，
+// 失敗時例外會讓 Job 依 $tries / $backoff 重試
+class CourseRegistrationEmail extends Mailable
 {
     use Queueable, SerializesModels;
 

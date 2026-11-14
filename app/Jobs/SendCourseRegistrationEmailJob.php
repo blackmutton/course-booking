@@ -51,7 +51,7 @@ class SendCourseRegistrationEmailJob implements ShouldQueue
 
         // 在這裡撰寫發送課程報名電子郵件的邏輯
         Mail::to($this->user->email)->send(new CourseRegistrationEmail($this->user, $this->courseRegistration));
-        $registration->update(['email_sent_at' => now()]);
+        $registration->whereNull('email_sent_at')->update(['email_sent_at' => now()]);
         Log::info(
             'Course registration email sent to user.',
             [
