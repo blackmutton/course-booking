@@ -19,7 +19,6 @@ Route::get('/course-registrations/{courseRegistration}/confirm', [CourseRegistra
     ->middleware('signed')
     ->name('api.course-registrations.confirm');
 Route::apiResource('/courses', CourseController::class)->only(['index', 'show']);
-Route::post('/courses/{course}/enroll', [CourseController::class, 'register'])->name('courses.enroll');
 Route::post('/forgot-password', [ForgotPasswordController::class, 'forget']);
 Route::post('/reset-password', [ResetPasswordController::class, 'reset']);
 
@@ -32,6 +31,8 @@ Route::middleware('auth:sanctum')->group(function () {
 });
 
 Route::middleware(['auth:sanctum', 'verified'])->group(function () {
+    // 註冊課程，業務考量需要使用者驗證電子郵件後才能註冊課程，因此加上 verified middleware
+    Route::post('/courses/{course}/enroll', [CourseController::class, 'register'])->name('courses.enroll');
     // 後台
     Route::middleware('can:access-admin-panel')->prefix('admin')->group(function () {
         Route::get('/dashboard', function () {
