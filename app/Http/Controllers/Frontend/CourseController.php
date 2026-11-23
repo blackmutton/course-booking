@@ -6,6 +6,7 @@ use App\Enums\CourseRegistrationStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Course;
 use App\Models\CourseRegistration;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
@@ -197,8 +198,7 @@ class CourseController extends Controller
 
                 return response()->json(['message' => 'Success'], 201);
             });
-        } catch (\Throwable $e) {
-
+        } catch (LockTimeoutException $e) {
             // 記錄實際錯誤，方便除錯
             Log::error('Failed to register course.', [
                 'user_id' => $user->id ?? null,
@@ -209,6 +209,18 @@ class CourseController extends Controller
             return response()->json([
                 'message' => '系統忙碌中，請稍後再試'
             ], 503);
+        } catch (\Throwable $e) {
+
+            // 記錄實際錯誤，方便除錯
+            Log::error('Failed to register course.', [
+                'user_id' => $user->id ?? null,
+                'course_id' => $id,
+                'message' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => '報名失敗，請聯絡客服人員'
+            ], 400);
         } finally {
             $lock?->release();
         }
