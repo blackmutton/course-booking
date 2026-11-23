@@ -6,15 +6,17 @@ use App\Enums\CourseRegistrationStatus;
 use App\Mail\CourseRegistrationEmail;
 use App\Models\CourseRegistration;
 use App\Models\User;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
-class SendCourseRegistrationEmailJob implements ShouldQueue
+class SendCourseRegistrationEmailJob implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -24,7 +26,6 @@ class SendCourseRegistrationEmailJob implements ShouldQueue
     public $tries = 3;
 
     public $backoff = [10, 30, 60];
-
 
     /**
      * Create a new job instance.
@@ -36,29 +37,51 @@ class SendCourseRegistrationEmailJob implements ShouldQueue
     }
 
     /**
+     * Returns the unique ID for the job.
+     * 避免相同 Unique ID 的 Job 重複進入 Queue
+     *
+     * @return string
+     */
+    public function uniqueId(): string
+    {
+        return (string) $this->courseRegistration->id;
+    }
+
+    /**
      * Execute the job.
      */
     public function handle(): void
     {
-        // 重新確認寄送狀態
-        $registration = CourseRegistration::findOrFail(
-            $this->courseRegistration->id
-        );
-        // 避免重複寄送
-        if ($registration->status !== CourseRegistrationStatus::Pending || $registration->email_sent_at) {
-            return;
-        }
+        $registrationId = $this->courseRegistration->id;
+        // 使用 Cache 鎖定，避免同一個報名資料被多個 Job 同時處理
+        Cache::lock("course-registration-email:{$registrationId}", 60)
+            ->block(5, function () use ($registrationId) {
 
-        // 在這裡撰寫發送課程報名電子郵件的邏輯
-        Mail::to($this->user->email)->send(new CourseRegistrationEmail($this->user, $this->courseRegistration));
-        $registration->whereNull('email_sent_at')->update(['email_sent_at' => now()]);
-        Log::info(
-            'Course registration email sent to user.',
-            [
-                'user_id' => $this->user->id,
-                'email' => $this->user->email,
-            ]
-        );
+                $registration = CourseRegistration::find($registrationId);
+
+                if (!$registration) {
+                    return;
+                }
+
+                // 確認報名狀態與寄送狀態
+                if (
+                    $registration->status !== CourseRegistrationStatus::Pending ||
+                    $registration->email_sent_at !== null
+                ) {
+                    return;
+                }
+
+                Mail::to($this->user->email)->send(new CourseRegistrationEmail($this->user, $registration));
+
+                $registration->email_sent_at = now();
+                $registration->save();
+
+                Log::info('Course registration email sent.', [
+                    'user_id' => $this->user->id,
+                    'email' => $this->user->email,
+                    'course_registration_id' => $registrationId,
+                ]);
+            });
     }
 
     public function failed(?\Throwable $exception): void
